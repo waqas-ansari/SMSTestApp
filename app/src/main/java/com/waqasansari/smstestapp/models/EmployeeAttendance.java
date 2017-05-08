@@ -8,13 +8,14 @@ import java.util.List;
 
 public class EmployeeAttendance {
     private String id, name, month;
-    private List<String> checkIns, checkOuts;
+    private List<String> dateList, checkIns, checkOuts;
 
 
-    public EmployeeAttendance(String id, String name, String month, List<String> checkIns, List<String> checkOuts) {
+    public EmployeeAttendance(String id, String name, String month, List<String> dateList, List<String> checkIns, List<String> checkOuts) {
         this.id = id;
         this.name = name;
         this.month = month;
+        this.dateList = dateList;
         this.checkIns = checkIns;
         this.checkOuts = checkOuts;
     }
@@ -28,11 +29,19 @@ public class EmployeeAttendance {
         return name;
     }
 
+    public List<String> getDateList() {
+        return dateList;
+    }
+
     public List<String> getCheckIns() {
         return checkIns;
     }
 
     public List<String> getCheckOuts() {
         return checkOuts;
+    }
+
+    public String getMonth() {
+        return month;
     }
 }

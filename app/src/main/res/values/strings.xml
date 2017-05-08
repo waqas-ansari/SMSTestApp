@@ -1,3 +1,13 @@
 <resources>
     <string name="app_name">SMS Test App</string>
+    <string name="generate_report">Generate Report</string>
+    <string name="add_employee">Add Employee</string>
+    <string name="list_of_all_employees">List of All Employees</string>
+    <string name="add">Add</string>
+    <string name="cancel">Cancel</string>
+    <string name="name">Name</string>
+    <string name="phone_number">Phone Number (3451234567)</string>
+    <string name="date">Date</string>
+    <string name="check_in">Check In</string>
+    <string name="check_out">Check Out</string>
 </resources>

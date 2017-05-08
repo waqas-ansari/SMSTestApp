@@ -33,19 +33,6 @@ public class DatabaseHandler extends SQLiteOpenHelper {
     private static final String COLUMN_CHECK_OUT = "check_out";
     private static final String COLUMN_DATE = "date";
 
-    private static List<String> getMonths() {
-        List<String> months = new ArrayList<>();
-        for(int i = 0; i < 12; i++) {
-            months.add(theMonth(i));
-        }
-        return months;
-    }
-
-    private static String theMonth(int month){
-        String[] monthNames = {"January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
-        return monthNames[month];
-    }
-
     public DatabaseHandler(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
     }
@@ -59,11 +46,11 @@ public class DatabaseHandler extends SQLiteOpenHelper {
         db.execSQL(CREATE_EMPLOYEE_INFO_TABLE);
 
         String CREATE_ATTENDANCE_TABLE =
-                "CREATE TABLE " + TABLE_EMPLOYEE_DETAIL +
+                "CREATE TABLE " + TABLE_ATTENDANCE +
                         "(" + COLUMN_ID + " TEXT, " +
                         COLUMN_MONTH + " TEXT, " +
-                        COLUMN_CHECK_IN + " INTEGER DEFAULT 0, " +
-                        COLUMN_CHECK_OUT + " INTEGER DEFAULT 0, " +
+                        COLUMN_CHECK_IN + " TEXT DEFAULT '0', " +
+                        COLUMN_CHECK_OUT + " TEXT DEFAULT '0', " +
                         COLUMN_DATE + " TEXT);";
         db.execSQL(CREATE_ATTENDANCE_TABLE);
     }
@@ -76,6 +63,51 @@ public class DatabaseHandler extends SQLiteOpenHelper {
 
         // Create tables again
         onCreate(db);
+    }
+
+    private String getName(String id) {
+        SQLiteDatabase database = getReadableDatabase();
+        String query = "SELECT " + COLUMN_NAME + " FROM " + TABLE_EMPLOYEE_DETAIL + " WHERE " + COLUMN_ID + " = ?";
+
+        Cursor cursor = database.rawQuery(query, new String[]{id});
+        String name = null;
+        if(cursor.getCount() > 0) {
+            cursor.moveToFirst();
+            name = cursor.getString(cursor.getColumnIndex(COLUMN_NAME));
+        }
+        cursor.close();
+        database.close();
+
+        return name;
+    }
+
+    public EmployeeAttendance getAttendance(String id, String month) {
+        SQLiteDatabase database = getReadableDatabase();
+
+        String query = "SELECT * FROM " + TABLE_ATTENDANCE +
+                " WHERE " + COLUMN_ID + " = ? AND " + COLUMN_MONTH + " = ?";
+        Cursor cursor = database.rawQuery(query, new String[] {id, month});
+        List<String> checkIns = new ArrayList<>(), checkOuts = new ArrayList<>(), dateList = new ArrayList<>();
+        if(cursor.getCount() > 0) {
+            cursor.moveToFirst();
+            do {
+                dateList.add(cursor.getString(cursor.getColumnIndex(COLUMN_DATE)));
+                checkIns.add(cursor.getString(cursor.getColumnIndex(COLUMN_CHECK_IN)));
+                checkOuts.add(cursor.getString(cursor.getColumnIndex(COLUMN_CHECK_OUT)));
+            } while (cursor.moveToNext());
+        }
+
+        EmployeeAttendance attendance = new EmployeeAttendance(
+                id, getName(id),
+                month,
+                dateList,
+                checkIns, checkOuts
+        );
+
+        cursor.close();
+        database.close();
+
+        return attendance;
     }
 
     public List<EmployeeAttendance> getAllEmployeesAttendance() {
@@ -92,21 +124,24 @@ public class DatabaseHandler extends SQLiteOpenHelper {
             } while (cursor.moveToNext());
         } else return null;
 
-        for(String month : getMonths()) {
+        for(String month : Utils.getMonths()) {
             for(Map.Entry<String, String> entry : list.entrySet()){
                 query = "SELECT * FROM " + TABLE_ATTENDANCE +
                         " WHERE " + COLUMN_ID + " = ? AND " + COLUMN_MONTH + " = ?";
                 cursor = database.rawQuery(query, new String[] {entry.getKey(), month});
-                List<String> checkIns = new ArrayList<>(), checkOuts = new ArrayList<>();
+                List<String> checkIns = new ArrayList<>(), checkOuts = new ArrayList<>(), dateList = new ArrayList<>();
                 if(cursor.getCount() > 0) {
                     cursor.moveToFirst();
                     do {
+                        dateList.add(cursor.getString(cursor.getColumnIndex(COLUMN_DATE)));
                         checkIns.add(cursor.getString(cursor.getColumnIndex(COLUMN_CHECK_IN)));
                         checkOuts.add(cursor.getString(cursor.getColumnIndex(COLUMN_CHECK_OUT)));
                     } while (cursor.moveToNext());
                 }
                 employeeAttendanceList.add(new EmployeeAttendance(
-                        entry.getKey(), entry.getValue(), cursor.getString(cursor.getColumnIndex(COLUMN_MONTH)),
+                        entry.getKey(), entry.getValue(),
+                        month,
+                        dateList,
                         checkIns, checkOuts
                 ));
             }
@@ -153,29 +188,33 @@ public class DatabaseHandler extends SQLiteOpenHelper {
     }
     private boolean checkIfAlreadyCheckedIn(String id) {
         SQLiteDatabase database = getReadableDatabase();
-        String query = "SELECT * FROM " + TABLE_EMPLOYEE_DETAIL + " WHERE id = ?";
+        String query = "SELECT * FROM " + TABLE_ATTENDANCE + " WHERE " + COLUMN_ID + " = ?";
 
         Cursor cursor = database.rawQuery(query, new String[]{id});
-        int checkIn = cursor.getInt(cursor.getColumnIndex(COLUMN_CHECK_IN));
+        cursor.moveToFirst();
+        String checkIn = "0";
+        if(cursor.getCount() > 0)
+            checkIn = cursor.getString(cursor.getColumnIndex(COLUMN_CHECK_IN));
         cursor.close();
         database.close();
-
-        return checkIn != 0;
+        return !checkIn.equals("0");
     }
 
     private boolean checkIfAlreadyCheckedOut(String id) {
         SQLiteDatabase database = getReadableDatabase();
-        String query = "SELECT * FROM " + TABLE_EMPLOYEE_DETAIL + " WHERE id = ?";
+        String query = "SELECT * FROM " + TABLE_ATTENDANCE + " WHERE id = ?";
 
         Cursor cursor = database.rawQuery(query, new String[]{id});
-        int checkOut = cursor.getInt(cursor.getColumnIndex(COLUMN_CHECK_OUT));
+        cursor.moveToFirst();
+        String checkOut = "0";
+        if(cursor.getCount() > 0)
+            checkOut = cursor.getString(cursor.getColumnIndex(COLUMN_CHECK_OUT));
         cursor.close();
         database.close();
-
-        return checkOut != 0;
+        return !checkOut.equals("0");
     }
 
-    private void addEmployee(Employee employee) {
+    public void addEmployee(Employee employee) {
         SQLiteDatabase database = getWritableDatabase();
         ContentValues values = new ContentValues();
         values.put(COLUMN_ID, employee.getId());
@@ -187,21 +226,22 @@ public class DatabaseHandler extends SQLiteOpenHelper {
 
     public void checkInOrOut(String id) {
         if(checkIfExists(id)) {
-            SQLiteDatabase database = getWritableDatabase();
             if(! checkIfAlreadyCheckedIn(id)) {
+                SQLiteDatabase database = getWritableDatabase();
                 ContentValues values = new ContentValues();
                 values.put(COLUMN_ID, id);
                 values.put(COLUMN_MONTH, Utils.getCurrentMonth());
                 values.put(COLUMN_DATE, Utils.getFormattedDate());
-                values.put(COLUMN_CHECK_IN, 1);
+                values.put(COLUMN_CHECK_IN, Utils.getCurrentTime());
                 database.insert(TABLE_ATTENDANCE, null, values);
                 database.close();
             } else if(! checkIfAlreadyCheckedOut(id)) {
+                SQLiteDatabase database = getWritableDatabase();
                 ContentValues values = new ContentValues();
                 values.put(COLUMN_ID, id);
                 values.put(COLUMN_MONTH, Utils.getCurrentMonth());
                 values.put(COLUMN_DATE, Utils.getFormattedDate());
-                values.put(COLUMN_CHECK_OUT, 1);
+                values.put(COLUMN_CHECK_OUT, Utils.getCurrentTime());
                 database.update(TABLE_ATTENDANCE, values, COLUMN_ID + " = ?", new String[]{id});
                 database.close();
             }
